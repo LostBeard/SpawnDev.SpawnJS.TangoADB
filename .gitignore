@@ -1,0 +1,19 @@
+## .NET
+bin/
+obj/
+[Bb]in/
+[Oo]bj/
+*.user
+.vs/
+
+## Node (bundle build only - node_modules is not committed)
+bundle/node_modules/
+bundle/package-lock.json
+
+## Publish output
+publish/
+[Pp]ublish/
+
+## OS
+Thumbs.db
+.DS_Store

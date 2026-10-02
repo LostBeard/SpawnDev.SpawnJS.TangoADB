@@ -1,0 +1,60 @@
+@inherits LayoutComponentBase
+@inject TangoService Tango
+@implements IDisposable
+
+<RadzenComponents />
+<RadzenDialog />
+<RadzenNotification />
+
+<RadzenLayout>
+    <RadzenHeader>
+        <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.75rem" class="rz-px-3 rz-py-2">
+            <RadzenSidebarToggle Click="@(() => sidebarExpanded = !sidebarExpanded)" />
+            <span class="material-symbols-rounded tango-accent">adb</span>
+            <RadzenText TextStyle="TextStyle.H6" class="rz-m-0">TangoADB</RadzenText>
+            <RadzenText TextStyle="TextStyle.Caption" class="rz-m-0" Style="color:#9aa0a6;">ADB over WebUSB</RadzenText>
+            <div style="flex:1"></div>
+            @if (Tango.IsConnected)
+            {
+                <RadzenBadge BadgeStyle="BadgeStyle.Success" Shade="Shade.Dark" Text="@($"Connected: {Tango.Adb!.Serial}")" />
+            }
+            else
+            {
+                <RadzenBadge BadgeStyle="BadgeStyle.Light" Shade="Shade.Dark" Text="No device" />
+            }
+        </RadzenStack>
+    </RadzenHeader>
+    <RadzenSidebar @bind-Expanded="@sidebarExpanded">
+        <RadzenPanelMenu>
+            <RadzenPanelMenuItem Text="Connect" Icon="usb" Path="" />
+            <RadzenPanelMenuItem Text="Shell" Icon="terminal" Path="shell" />
+            <RadzenPanelMenuItem Text="Files" Icon="folder" Path="files" />
+            <RadzenPanelMenuItem Text="Install APK" Icon="install_mobile" Path="install" />
+            <RadzenPanelMenuItem Text="Packages" Icon="apps" Path="packages" />
+            <RadzenPanelMenuItem Text="Power" Icon="power_settings_new" Path="power" />
+            <RadzenPanelMenuItem Text="Screen (scrcpy)" Icon="screen_share" Path="screen" />
+            <RadzenPanelMenuItem Text="Wrapper Verification" Icon="checklist" Path="verification" />
+        </RadzenPanelMenu>
+    </RadzenSidebar>
+    <RadzenBody>
+        <div class="rz-p-4">
+            @Body
+        </div>
+    </RadzenBody>
+    <RadzenFooter>
+        <RadzenText TextStyle="TextStyle.Caption" class="rz-m-0 rz-px-3 rz-py-2" Style="color:#9aa0a6;">
+            SpawnDev.SpawnJS.TangoADB &middot; Tango (@@yume-chan/adb) v@(Tango_Version) &middot; Requires Chromium + HTTPS
+        </RadzenText>
+    </RadzenFooter>
+</RadzenLayout>
+
+@code {
+    bool sidebarExpanded = true;
+    string Tango_Version => SpawnDev.SpawnJS.TangoADB.Tango.BundledLibraryVersion;
+
+    protected override void OnInitialized() => Tango.ConnectionChanged += OnConnectionChanged;
+
+    void OnConnectionChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Tango.ConnectionChanged -= OnConnectionChanged;
+}

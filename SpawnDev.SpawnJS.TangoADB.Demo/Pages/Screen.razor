@@ -1,0 +1,135 @@
+@page "/screen"
+@using SpawnDev.SpawnJS.JSObjects
+@inject TangoService Tango
+@inject SpawnJSRuntime JS
+@inject NotificationService Notifications
+@implements IAsyncDisposable
+
+<RadzenText TextStyle="TextStyle.H4">Screen (scrcpy)</RadzenText>
+<RadzenText TextStyle="TextStyle.Body1" class="rz-mb-3" Style="color:#9aa0a6;">
+    Mirrors the device screen: pushes the scrcpy server, starts it via <code>AdbScrcpyClient</code>,
+    decodes the H.264/H.265 video with <code>WebCodecsVideoDecoder</code>, and renders into a canvas.
+</RadzenText>
+
+@if (!Tango.IsConnected)
+{
+    <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat" Shade="Shade.Dark" AllowClose="false">Connect a device first.</RadzenAlert>
+}
+else
+{
+    @if (!WebCodecsVideoDecoder.IsSupported)
+    {
+        <RadzenAlert AlertStyle="AlertStyle.Warning" Variant="Variant.Flat" Shade="Shade.Dark" AllowClose="false">
+            This browser does not support the WebCodecs VideoDecoder API required for scrcpy mirroring.
+        </RadzenAlert>
+    }
+    <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" class="rz-mb-3">
+        <RadzenButton Text="Start mirroring" Icon="play_arrow" Disabled="@(busy || running)" Click="@Start" />
+        <RadzenButton Text="Stop" Icon="stop" ButtonStyle="ButtonStyle.Light" Disabled="@(!running)" Click="@Stop" />
+        @if (running)
+        {
+            <RadzenText TextStyle="TextStyle.Body2" class="rz-m-0" Style="align-self:center;color:#9aa0a6;">@width x @height &middot; @frames frames</RadzenText>
+        }
+        @if (busy)
+        {
+            <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.Small" />
+        }
+    </RadzenStack>
+
+    <div style="background:#000;border:1px solid #1f2937;border-radius:6px;display:inline-block;max-width:100%;">
+        <canvas id="scrcpy-canvas" style="max-width:100%;max-height:70vh;display:block;"></canvas>
+    </div>
+
+    @if (!string.IsNullOrEmpty(log))
+    {
+        <div class="tango-terminal rz-mt-3">@log</div>
+    }
+}
+
+@code {
+    AdbScrcpyClient? client;
+    WebCodecsVideoDecoder? decoder;
+    TangoSubscription? sizeSub;
+    bool busy, running;
+    int width, height, frames;
+    string log = string.Empty;
+
+    const string ServerVersion = "3.3.1";
+    const string ServerUrl = "_content/SpawnDev.SpawnJS.TangoADB/scrcpy-server";
+    const string ServerPath = "/data/local/tmp/scrcpy-server.jar";
+
+    async Task Start()
+    {
+        if (Tango.Adb == null) return;
+        busy = true;
+        log = "Pushing scrcpy server to device...\n";
+        try
+        {
+            // 1. Fetch the bundled scrcpy-server jar and push it to the device.
+            using var response = await JS.Fetch(ServerUrl);
+            using var serverStream = response.Body!;
+            await AdbScrcpyClient.PushServer(Tango.Adb, serverStream);
+
+            // 2. Start the server with default (video on) options matching the pushed server version.
+            log += "Starting scrcpy server...\n";
+            var options = new AdbScrcpyOptionsLatest(new ScrcpyOptionsInit(), new AdbScrcpyClientOptions { Version = ServerVersion });
+            client = await AdbScrcpyClient.Start(Tango.Adb, ServerPath, options);
+
+            if (!client.HasVideoStream)
+            {
+                log += "No video stream (video disabled by server).\n";
+                return;
+            }
+
+            // 3. Wire the decoder + renderer into the canvas and pipe the video stream in.
+            var videoStream = await client.VideoStream;
+            width = videoStream.Width; height = videoStream.Height;
+            var codec = videoStream.Metadata.Codec;
+
+            using var document = JS.Get<Document>("document");
+            var canvas = document.QuerySelector<HTMLCanvasElement>("#scrcpy-canvas")!;
+            var renderer = WebGLVideoFrameRenderer.IsSupported
+                ? (SpawnJSObject)new WebGLVideoFrameRenderer(canvas)
+                : new BitmapVideoFrameRenderer(canvas);
+
+            decoder = new WebCodecsVideoDecoder(new WebCodecsVideoDecoderOptions { Codec = codec, Renderer = renderer });
+            sizeSub = decoder.OnSizeChanged(s => { width = s.Width; height = s.Height; InvokeAsync(StateHasChanged); });
+
+            running = true;
+            log += $"Mirroring started ({width}x{height}, codec {codec}).\n";
+
+            // Pipe the demuxed video packets into the decoder (runs until the stream ends).
+            _ = videoStream.Stream.PipeTo(decoder.Writable);
+            _ = PollStats();
+        }
+        catch (Exception ex)
+        {
+            log += $"[error] {ex.Message}\n";
+            Notifications.Notify(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = "scrcpy failed", Detail = ex.Message, Duration = 7000 });
+            await Stop();
+        }
+        finally { busy = false; }
+    }
+
+    async Task PollStats()
+    {
+        while (running && decoder != null)
+        {
+            frames = decoder.FramesRendered;
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(500);
+        }
+    }
+
+    async Task Stop()
+    {
+        running = false;
+        sizeSub?.Dispose(); sizeSub = null;
+        try { decoder?.Release(); } catch { }
+        decoder?.Dispose(); decoder = null;
+        if (client != null) { try { await client.Close(); } catch { } client.Dispose(); client = null; }
+        log += "Stopped.\n";
+    }
+
+    public async ValueTask DisposeAsync() => await Stop();
+}

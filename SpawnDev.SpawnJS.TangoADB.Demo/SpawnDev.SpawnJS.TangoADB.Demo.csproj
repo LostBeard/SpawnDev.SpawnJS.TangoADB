@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.12" />
+		<PackageReference Include="SpawnDev.SpawnJS.Blazor" Version="3.0.1" />
+		<PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.12" PrivateAssets="all" />
+		<PackageReference Include="Radzen.Blazor" Version="8.6.2" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- Under TrimMode=full the app assembly is trimmed too, and Blazor picks the layout and pages by Type: MainLayout's
+		     ctor was removed ("CtorNotLocated"). Root the demo; every library is still fully trimmed. -->
+		<TrimmerRootAssembly Include="SpawnDev.SpawnJS.TangoADB.Demo" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- Browser only: SpawnJS and WebUSB exist only in the browser. -->
+		<AssemblyAttribute Include="System.Runtime.Versioning.SupportedOSPlatformAttribute">
+			<_Parameter1>browser</_Parameter1>
+		</AssemblyAttribute>
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\SpawnDev.SpawnJS.TangoADB\SpawnDev.SpawnJS.TangoADB.csproj" />
+	</ItemGroup>
+
+</Project>

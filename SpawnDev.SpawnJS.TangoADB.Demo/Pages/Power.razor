@@ -1,0 +1,43 @@
+@page "/power"
+@inject TangoService Tango
+@inject NotificationService Notifications
+@inject DialogService Dialogs
+
+<RadzenText TextStyle="TextStyle.H4">Power</RadzenText>
+<RadzenText TextStyle="TextStyle.Body1" class="rz-mb-3" Style="color:#9aa0a6;">
+    Reboot the connected device into various modes via <code>adb.Power</code>.
+</RadzenText>
+
+@if (!Tango.IsConnected)
+{
+    <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat" Shade="Shade.Dark" AllowClose="false">Connect a device first.</RadzenAlert>
+}
+else
+{
+    <RadzenStack Orientation="Orientation.Horizontal" Wrap="FlexWrap.Wrap" Gap="0.6rem">
+        <RadzenButton Text="Reboot" Icon="restart_alt" Disabled="@busy" Click="@(() => Run("Reboot", a => a.Power.Reboot()))" />
+        <RadzenButton Text="Recovery" Icon="healing" ButtonStyle="ButtonStyle.Secondary" Disabled="@busy" Click="@(() => Run("Reboot to recovery", a => a.Power.Recovery()))" />
+        <RadzenButton Text="Bootloader" Icon="memory" ButtonStyle="ButtonStyle.Secondary" Disabled="@busy" Click="@(() => Run("Reboot to bootloader", a => a.Power.Bootloader()))" />
+        <RadzenButton Text="Sideload" Icon="sd_card" ButtonStyle="ButtonStyle.Secondary" Disabled="@busy" Click="@(() => Run("Reboot to sideload", a => a.Power.Sideload()))" />
+        <RadzenButton Text="Power off" Icon="power_settings_new" ButtonStyle="ButtonStyle.Danger" Disabled="@busy" Click="@(() => Run("Power off", a => a.Power.PowerOff()))" />
+    </RadzenStack>
+}
+
+@code {
+    bool busy;
+
+    async Task Run(string label, Func<Adb, Task<string>> action)
+    {
+        if (Tango.Adb == null) return;
+        var ok = await Dialogs.Confirm($"{label}?", "Confirm", new ConfirmOptions { OkButtonText = "Yes", CancelButtonText = "Cancel" });
+        if (ok != true) return;
+        busy = true;
+        try
+        {
+            await action(Tango.Adb);
+            Notifications.Notify(new NotificationMessage { Severity = NotificationSeverity.Success, Summary = label, Detail = "Command sent.", Duration = 4000 });
+        }
+        catch (Exception ex) { Notifications.Notify(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = label, Detail = ex.Message, Duration = 6000 }); }
+        finally { busy = false; }
+    }
+}

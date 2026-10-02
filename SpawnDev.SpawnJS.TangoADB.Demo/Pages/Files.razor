@@ -1,0 +1,85 @@
+@page "/files"
+@inject TangoService Tango
+@inject NotificationService Notifications
+
+<RadzenText TextStyle="TextStyle.H4">Files</RadzenText>
+<RadzenText TextStyle="TextStyle.Body1" class="rz-mb-3" Style="color:#9aa0a6;">
+    Browse the device filesystem via the ADB sync service (<code>adb.Sync().Readdir(path)</code>).
+    Click a directory row to open it.
+</RadzenText>
+
+@if (!Tango.IsConnected)
+{
+    <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat" Shade="Shade.Dark" AllowClose="false">Connect a device first.</RadzenAlert>
+}
+else
+{
+    <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" class="rz-mb-3">
+        <RadzenButton Icon="arrow_upward" ButtonStyle="ButtonStyle.Light" Disabled="@busy" Click="@GoUp" />
+        <RadzenTextBox @bind-Value="@path" Style="flex:1;font-family:monospace;" />
+        <RadzenButton Text="Go" Icon="refresh" Disabled="@busy" Click="@Refresh" />
+    </RadzenStack>
+
+    <RadzenDataGrid Data="@entries" TItem="AdbSyncEntry" AllowSorting="true" Density="Density.Compact"
+                    RowClick="@OnRowClick" Style="background:#0e1116;">
+        <Columns>
+            <RadzenDataGridColumn TItem="AdbSyncEntry" Title="Name" Property="Name">
+                <Template Context="e">
+                    <span class="material-symbols-rounded" style="vertical-align:middle;font-size:1.1rem;color:#9aa0a6;">@(e.Type == LinuxFileType.Directory ? "folder" : e.Type == LinuxFileType.Link ? "link" : "draft")</span>
+                    <span class="rz-ml-1">@e.Name</span>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="AdbSyncEntry" Title="Type" Width="110px">
+                <Template Context="e">@e.Type</Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="AdbSyncEntry" Title="Size" Width="120px">
+                <Template Context="e">@(e.Type == LinuxFileType.File ? e.Size.ToString("N0") : "")</Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+}
+
+@code {
+    string path = "/sdcard";
+    List<AdbSyncEntry> entries = new();
+    bool busy;
+
+    async Task Refresh()
+    {
+        if (Tango.Adb == null) return;
+        busy = true;
+        var sync = await Tango.Adb.Sync();
+        try
+        {
+            var list = await sync.Readdir(path);
+            // Each entry holds a JS handle: release the previous listing and the "." / ".." entries we drop.
+            foreach (var old in entries) old.Dispose();
+            entries = new List<AdbSyncEntry>();
+            foreach (var e in list)
+            {
+                if (e.Name == "." || e.Name == "..") e.Dispose();
+                else entries.Add(e);
+            }
+            entries = entries.OrderByDescending(e => e.Type == LinuxFileType.Directory).ThenBy(e => e.Name).ToList();
+        }
+        catch (Exception ex) { Notifications.Notify(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = "Readdir failed", Detail = ex.Message, Duration = 6000 }); }
+        finally { await sync.Release(); sync.Dispose(); busy = false; }
+    }
+
+    async Task OnRowClick(DataGridRowMouseEventArgs<AdbSyncEntry> args)
+    {
+        if (args.Data?.Type == LinuxFileType.Directory)
+        {
+            path = (path.TrimEnd('/')) + "/" + args.Data.Name;
+            await Refresh();
+        }
+    }
+
+    async Task GoUp()
+    {
+        var trimmed = path.TrimEnd('/');
+        var idx = trimmed.LastIndexOf('/');
+        path = idx <= 0 ? "/" : trimmed[..idx];
+        await Refresh();
+    }
+}

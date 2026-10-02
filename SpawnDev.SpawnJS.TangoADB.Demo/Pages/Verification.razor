@@ -1,0 +1,244 @@
+@page "/verification"
+@using System.Numerics
+@using SpawnDev.SpawnJS.JSObjects
+@inject SpawnJSRuntime JS
+
+<RadzenText TextStyle="TextStyle.H4">Wrapper Verification</RadzenText>
+<RadzenText TextStyle="TextStyle.Body1" class="rz-mb-3" Style="color:#9aa0a6;">
+    Imports the Tango bundle, confirms every wrapped export resolves on the JS global <code>TangoADB</code>,
+    then round trips values through the wrappers (BigInt sizes, enums, arrays, option objects, events).
+    This needs no device - it validates the bundle, the C#-to-JS name mapping and the marshalling.
+</RadzenText>
+
+<RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" class="rz-mb-3">
+    <RadzenButton Text="Run checks" Icon="play_arrow" Disabled="@busy" Click="@Run" />
+    @if (ran)
+    {
+        <RadzenBadge BadgeStyle="@(failed == 0 ? BadgeStyle.Success : BadgeStyle.Danger)" Shade="Shade.Dark"
+                     Text="@($"{checks.Count - failed}/{checks.Count} passed")" Style="align-self:center;" />
+    }
+</RadzenStack>
+
+<RadzenText TextStyle="TextStyle.Body2" class="rz-mb-3">Bundled @@yume-chan/adb version: <b>@Tango.BundledLibraryVersion</b></RadzenText>
+
+@if (ran)
+{
+    <RadzenDataGrid Data="@checks" TItem="Check" Density="Density.Compact" Style="background:#0e1116;">
+        <Columns>
+            <RadzenDataGridColumn TItem="Check" Title="Check" Property="Name" />
+            <RadzenDataGridColumn TItem="Check" Title="Result" Width="120px">
+                <Template Context="c">
+                    @if (c.Ok)
+                    {
+                        <RadzenBadge BadgeStyle="BadgeStyle.Success" Shade="Shade.Dark" Text="OK" />
+                    }
+                    else
+                    {
+                        <RadzenBadge BadgeStyle="BadgeStyle.Danger" Shade="Shade.Dark" Text="@(c.IsExport ? "MISSING" : "FAIL")" />
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="Check" Title="Detail" Property="Detail" />
+        </Columns>
+    </RadzenDataGrid>
+}
+
+@code {
+    class Check
+    {
+        public string Name { get; init; } = "";
+        public bool IsExport { get; init; }
+        public Func<string?>? Run { get; init; }
+        public bool Ok { get; set; }
+        public string Detail { get; set; } = "";
+    }
+    bool busy, ran;
+    int failed;
+    List<Check> checks = new();
+
+    static readonly string[] Exports =
+    {
+        "TangoADB",
+        "TangoADB.Adb",
+        "TangoADB.AdbDaemonTransport",
+        "TangoADB.AdbBanner",
+        "TangoADB.AdbPower",
+        "TangoADB.AdbSync",
+        "TangoADB.AdbDaemonWebUsbDeviceManager",
+        "TangoADB.AdbDaemonWebUsbDevice",
+        "TangoADB.AdbDaemonWebUsbConnection",
+        "TangoADB.AdbDaemonWebUsbDeviceObserver",
+        "TangoADB.AdbWebCredentialStore",
+        "TangoADB.AndroidBin",
+        "TangoADB.AndroidBin.PackageManager",
+        "TangoADB.AndroidBin.Logcat",
+        "TangoADB.Scrcpy",
+        "TangoADB.Scrcpy.ScrcpyOptionsLatest",
+        "TangoADB.Scrcpy.ScrcpyControlMessageSerializer",
+        "TangoADB.AdbScrcpy",
+        "TangoADB.AdbScrcpy.AdbScrcpyClient",
+        "TangoADB.WebCodecsVideoDecoder",
+        "TangoADB.TinyH264Decoder",
+        "TangoADB.StreamExtra",
+        "TangoADB.Event",
+        "TangoADB.Event.EventEmitter",
+    };
+
+    // Each returns null on success or a description of what was wrong. Values are chosen so a lossy path fails:
+    // 0n is falsy in JS, 5e9 does not fit an int32, the pointer id needs all 8 bytes in the right order.
+    List<Check> BuildChecks()
+    {
+        var list = new List<Check>();
+        foreach (var path in Exports)
+        {
+            list.Add(new Check
+            {
+                Name = path,
+                IsExport = true,
+                Run = () => JS.TypeOf(path) == "undefined" ? "undefined" : null,
+            });
+        }
+        list.Add(new Check { Name = "AdbBanner.Parse: strings + string[]", Run = CheckBanner });
+        list.Add(new Check { Name = "Logcat statics: enum <-> name, int[] arg, long return", Run = CheckLogcat });
+        list.Add(new Check { Name = "AdbSyncStat.Size/Mtime: BigInt 0n, BigInt > 2^32, number", Run = CheckStatSizes });
+        list.Add(new Check { Name = "AdbSyncEntry[] from a JS array (the AdbSync.Readdir return path)", Run = CheckEntryArray });
+        list.Add(new Check { Name = "ScrcpyControlMessageSerializer.InjectTouch: BigInt pointerId, enum, POCO", Run = CheckInjectTouch });
+        list.Add(new Check { Name = "TangoEvents.Subscribe: callable event, typed arg, unsubscribe", Run = CheckEvents });
+        return list;
+    }
+
+    string? CheckBanner()
+    {
+        using var banner = AdbBanner.Parse("device::ro.product.name=hollywood;ro.product.model=Quest 3;ro.product.device=eureka;features=shell_v2,cmd,stat_v2");
+        var features = string.Join(",", banner.Features);
+        if (banner.State != "device" || banner.Product != "hollywood" || banner.Model != "Quest 3" || banner.Device != "eureka" || features != "shell_v2,cmd,stat_v2")
+            return $"state={banner.State} product={banner.Product} model={banner.Model} device={banner.Device} features={features}";
+        return null;
+    }
+
+    string? CheckLogcat()
+    {
+        var name = Logcat.LogIdToName(LogId.System);
+        var id = Logcat.LogNameToId("crash");
+        var joined = Logcat.JoinLogId(new[] { LogId.Main, LogId.System, LogId.Crash });
+        // Tango names buffers by its LogId enum keys ("System"), the reverse of logNameToId's capitalization.
+        // 5,000,000 GiB = 5,368,709,120,000,000 bytes: exact in a double, far past int32
+        var size = Logcat.ParseSize(5_000_000, "Gi");
+        if (name != "System" || id != LogId.Crash || joined != "Main,System,Crash" || size != 5_368_709_120_000_000L)
+            return $"name={name} id={id} joined={joined} size={size}";
+        return null;
+    }
+
+    string? CheckStatSizes()
+    {
+        var cases = new (string Label, Action<SpawnJSObjectReference> Set, long Expected)[]
+        {
+            ("BigInt 0n", o => { using var v = new BigInt(BigInteger.Zero); o.Set("size", v); o.Set("mtime", v); }, 0L),
+            ("BigInt 5000000000n", o => { using var v = new BigInt(new BigInteger(5_000_000_000L)); o.Set("size", v); o.Set("mtime", v); }, 5_000_000_000L),
+            ("number 0", o => { o.Set("size", 0); o.Set("mtime", 0); }, 0L),
+            ("number 123456", o => { o.Set("size", 123456); o.Set("mtime", 123456); }, 123456L),
+        };
+        var errors = new List<string>();
+        foreach (var c in cases)
+        {
+            var obj = JS.New("Object");
+            c.Set(obj);
+            using var stat = new AdbSyncStat(obj);
+            try
+            {
+                if (stat.Size != c.Expected || stat.Mtime != c.Expected) errors.Add($"{c.Label}: size={stat.Size} mtime={stat.Mtime}");
+            }
+            catch (Exception ex) { errors.Add($"{c.Label}: {ex.GetType().Name} {ex.Message}"); }
+        }
+        return errors.Count == 0 ? null : string.Join("; ", errors);
+    }
+
+    // Readdir hands back a JS array of entry objects; each element becomes a wrapper through the marshaller (reflection),
+    // which is the path a trimmed app needs ILLink.Descriptors.xml for.
+    string? CheckEntryArray()
+    {
+        using var array = JS.New("Array");
+        foreach (var (name, size) in new[] { ("a.txt", 0L), ("big.bin", 5_000_000_000L) })
+        {
+            using var entry = JS.New("Object");
+            entry.Set("name", name);
+            using var bigSize = new BigInt(new BigInteger(size));
+            entry.Set("size", bigSize);
+            entry.Set("mtime", bigSize);
+            entry.Set("type", (int)LinuxFileType.File);
+            array.CallVoid("push", entry);
+        }
+        var entries = array.As<AdbSyncEntry[]>();
+        try
+        {
+            var got = string.Join(",", entries.Select(e => $"{e.Name}:{e.Size}:{e.Type}"));
+            return got == "a.txt:0:File,big.bin:5000000000:File" ? null : $"entries={got}";
+        }
+        finally { foreach (var e in entries) e.Dispose(); }
+    }
+
+    string? CheckInjectTouch()
+    {
+        using var options = new ScrcpyOptionsLatest(new ScrcpyOptionsInit());
+        using var serializer = new ScrcpyControlMessageSerializer(options);
+        using var bytes = serializer.InjectTouch(new ScrcpyInjectTouchControlMessage
+        {
+            Action = AndroidMotionEventAction.Move,
+            PointerId = new BigInteger(0x0102030405060708L),
+            PointerX = 300,
+            PointerY = 400,
+            VideoWidth = 1920,
+            VideoHeight = 1080,
+            Pressure = 1,
+            ActionButton = 0,
+            Buttons = 0,
+        });
+        // InjectTouch (scrcpy 2.x+): u8 type, u8 action, u64 pointerId, u32 x, u32 y, u16 w, u16 h, u16 pressure,
+        // u32 actionButton, u32 buttons - big endian, 32 bytes.
+        var expected = new byte[]
+        {
+            2, 2, 1, 2, 3, 4, 5, 6, 7, 8,
+            0, 0, 0x01, 0x2C, 0, 0, 0x01, 0x90,
+            0x07, 0x80, 0x04, 0x38, 0xFF, 0xFF,
+            0, 0, 0, 0, 0, 0, 0, 0,
+        };
+        var actual = bytes.ReadBytes();
+        if (!actual.AsSpan().SequenceEqual(expected)) return $"bytes={Convert.ToHexString(actual)} expected={Convert.ToHexString(expected)}";
+        return null;
+    }
+
+    string? CheckEvents()
+    {
+        using var emitter = new SpawnJSObject(JS.New("TangoADB.Event.EventEmitter"));
+        var received = new List<string>();
+        var subscription = TangoEvents.Subscribe<string>(emitter, "event", v => received.Add(v));
+        emitter.JSRef!.CallVoid("fire", "first");
+        emitter.JSRef!.CallVoid("fire", "second");
+        subscription.Dispose();
+        emitter.JSRef!.CallVoid("fire", "after unsubscribe");
+        var got = string.Join("|", received);
+        return got == "first|second" ? null : $"received={got}";
+    }
+
+    async Task Run()
+    {
+        busy = true;
+        try
+        {
+            await Tango.Init();
+            checks = BuildChecks();
+            failed = 0;
+            foreach (var c in checks)
+            {
+                string? error;
+                try { error = c.Run!(); }
+                catch (Exception ex) { error = $"{ex.GetType().Name}: {ex.Message}"; }
+                c.Ok = error == null;
+                c.Detail = error ?? "";
+                if (!c.Ok) failed++;
+            }
+            ran = true;
+        }
+        finally { busy = false; }
+    }
+}

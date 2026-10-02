@@ -1,0 +1,43 @@
+@page "/shell"
+@inject TangoService Tango
+@inject NotificationService Notifications
+
+<RadzenText TextStyle="TextStyle.H4">Shell</RadzenText>
+<RadzenText TextStyle="TextStyle.Body1" class="rz-mb-3" Style="color:#9aa0a6;">
+    Runs a command via <code>adb.Subprocess</code> and shows the merged output. Try <code>getprop</code>,
+    <code>pm list packages -3</code>, <code>ls /sdcard</code>, <code>dumpsys battery</code>.
+</RadzenText>
+
+@if (!Tango.IsConnected)
+{
+    <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat" Shade="Shade.Dark" AllowClose="false">Connect a device first.</RadzenAlert>
+}
+else
+{
+    <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" class="rz-mb-3">
+        <RadzenTextBox @bind-Value="@command" Placeholder="getprop ro.product.model" Style="flex:1;font-family:monospace;" @oninput="@(e => command = (string?)e.Value ?? string.Empty)" />
+        <RadzenButton Text="Run" Icon="play_arrow" Disabled="@busy" Click="@Run" />
+        <RadzenButton Text="Clear" Icon="clear" ButtonStyle="ButtonStyle.Light" Click="@(() => output = string.Empty)" />
+    </RadzenStack>
+    <div class="tango-terminal">@output</div>
+}
+
+@code {
+    string command = "getprop ro.product.model";
+    string output = string.Empty;
+    bool busy;
+
+    async Task Run()
+    {
+        if (string.IsNullOrWhiteSpace(command) || Tango.Adb == null) return;
+        busy = true;
+        output += $"$ {command}\n";
+        try
+        {
+            var text = await Tango.Adb.Subprocess.NoneProtocol.SpawnWaitText(command);
+            output += text.TrimEnd() + "\n";
+        }
+        catch (Exception ex) { output += $"[error] {ex.Message}\n"; }
+        finally { busy = false; }
+    }
+}

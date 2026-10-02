@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="SpawnDev.SpawnJS.TangoADB/SpawnDev.SpawnJS.TangoADB.csproj" />
+  <Project Path="SpawnDev.SpawnJS.TangoADB.Demo/SpawnDev.SpawnJS.TangoADB.Demo.csproj" />
+  <Project Path="SpawnDev.SpawnJS.TangoADB.Tests/SpawnDev.SpawnJS.TangoADB.Tests.csproj" />
+</Solution>

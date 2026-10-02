@@ -1,0 +1,72 @@
+@page "/packages"
+@inject TangoService Tango
+@inject NotificationService Notifications
+@inject DialogService Dialogs
+
+<RadzenText TextStyle="TextStyle.H4">Packages</RadzenText>
+<RadzenText TextStyle="TextStyle.Body1" class="rz-mb-3" Style="color:#9aa0a6;">
+    Lists third-party packages (<code>pm list packages -3</code>) and uninstalls via
+    <code>PackageManager.Uninstall</code>.
+</RadzenText>
+
+@if (!Tango.IsConnected)
+{
+    <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat" Shade="Shade.Dark" AllowClose="false">Connect a device first.</RadzenAlert>
+}
+else
+{
+    <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" class="rz-mb-3">
+        <RadzenButton Text="Refresh" Icon="refresh" Disabled="@busy" Click="@Refresh" />
+        <RadzenText TextStyle="TextStyle.Body2" class="rz-m-0" Style="align-self:center;color:#9aa0a6;">@packages.Count packages</RadzenText>
+    </RadzenStack>
+
+    <RadzenDataGrid Data="@packages" TItem="string" AllowPaging="true" PageSize="20" Density="Density.Compact" Style="background:#0e1116;">
+        <Columns>
+            <RadzenDataGridColumn TItem="string" Title="Package">
+                <Template Context="p">@p</Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="string" Title="" Width="120px" Sortable="false" Filterable="false">
+                <Template Context="p">
+                    <RadzenButton Text="Uninstall" Icon="delete" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small" Disabled="@busy" Click="@(() => Uninstall(p))" />
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+}
+
+@code {
+    List<string> packages = new();
+    bool busy;
+
+    async Task Refresh()
+    {
+        if (Tango.Adb == null) return;
+        busy = true;
+        try
+        {
+            var text = await Tango.Adb.Subprocess.NoneProtocol.SpawnWaitText("pm list packages -3");
+            packages = text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(l => l.StartsWith("package:") ? l["package:".Length..] : l)
+                .Where(l => l.Length > 0).OrderBy(l => l).ToList();
+        }
+        catch (Exception ex) { Notifications.Notify(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = "List failed", Detail = ex.Message, Duration = 6000 }); }
+        finally { busy = false; }
+    }
+
+    async Task Uninstall(string packageName)
+    {
+        if (Tango.Adb == null) return;
+        var ok = await Dialogs.Confirm($"Uninstall {packageName}?", "Confirm", new ConfirmOptions { OkButtonText = "Uninstall", CancelButtonText = "Cancel" });
+        if (ok != true) return;
+        busy = true;
+        try
+        {
+            var pm = new PackageManager(Tango.Adb);
+            await pm.Uninstall(packageName);
+            Notifications.Notify(new NotificationMessage { Severity = NotificationSeverity.Success, Summary = "Uninstalled", Detail = packageName, Duration = 4000 });
+            await Refresh();
+        }
+        catch (Exception ex) { Notifications.Notify(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = "Uninstall failed", Detail = ex.Message, Duration = 6000 }); }
+        finally { busy = false; }
+    }
+}

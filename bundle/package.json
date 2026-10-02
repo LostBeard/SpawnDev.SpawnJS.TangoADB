@@ -1,0 +1,24 @@
+{
+  "name": "tango-adb-bundle",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bundles the @yume-chan Tango ADB packages into a single ESM file for SpawnDev.SpawnJS.TangoADB. Build with: dotnet run update.cs",
+  "type": "module",
+  "dependencies": {
+    "@yume-chan/adb": "latest",
+    "@yume-chan/adb-credential-web": "latest",
+    "@yume-chan/adb-daemon-webusb": "latest",
+    "@yume-chan/adb-scrcpy": "latest",
+    "@yume-chan/android-bin": "latest",
+    "@yume-chan/event": "latest",
+    "@yume-chan/fetch-scrcpy-server": "latest",
+    "@yume-chan/scrcpy": "latest",
+    "@yume-chan/scrcpy-decoder-tinyh264": "latest",
+    "@yume-chan/scrcpy-decoder-webcodecs": "latest",
+    "@yume-chan/stream-extra": "latest",
+    "@yume-chan/struct": "latest"
+  },
+  "devDependencies": {
+    "esbuild": "latest"
+  }
+}

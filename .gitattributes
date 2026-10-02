@@ -1,0 +1,7 @@
+* text=auto
+
+# Binary assets - never line-ending convert (scrcpy-server is a jar/zip).
+scrcpy-server binary
+*.bin binary
+*.png binary
+*.jar binary

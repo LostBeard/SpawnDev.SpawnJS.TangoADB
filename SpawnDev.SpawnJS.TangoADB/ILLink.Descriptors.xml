@@ -1,0 +1,15 @@
+<!--
+  The one thing the trimmer cannot see in this library: every wrapper (Adb, AdbSync, PackageManager, ...) is built by
+  the SpawnJS marshaller through Activator.CreateInstance(type, jsRef), and every options / message POCO is written to
+  Javascript by walking its properties with PropertyInfo.GetValue. Nothing calls those constructors or accessors
+  statically, so a trimmed app would lose them and fail at the first marshal ("MissingConstructor_Name" for a wrapper,
+  "Arg_GetMethNotFnd" for a POCO).
+
+  required="false" does NOT root these types: a wrapper the app never mentions is still removed. It only says that IF
+  a type is kept, its members are kept with it - the guarantee the marshaller needs. Same pattern as SpawnDev.SpawnJS.
+-->
+<linker>
+  <assembly fullname="SpawnDev.SpawnJS.TangoADB">
+    <type fullname="SpawnDev.SpawnJS.TangoADB*" required="false" preserve="all" />
+  </assembly>
+</linker>

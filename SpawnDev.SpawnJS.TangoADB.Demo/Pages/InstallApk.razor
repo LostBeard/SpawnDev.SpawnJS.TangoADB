@@ -1,0 +1,79 @@
+@page "/install"
+@using SpawnDev.SpawnJS.Blazor
+@using SpawnDev.SpawnJS.JSObjects
+@inject TangoService Tango
+@inject NotificationService Notifications
+
+<RadzenText TextStyle="TextStyle.H4">Install APK</RadzenText>
+<RadzenText TextStyle="TextStyle.Body1" class="rz-mb-3" Style="color:#9aa0a6;">
+    Pick a local <code>.apk</code> and stream it straight to the device for installation via
+    <code>PackageManager.PushAndInstallStream</code> - the bytes never leave the browser except to the device.
+</RadzenText>
+
+@if (!Tango.IsConnected)
+{
+    <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat" Shade="Shade.Dark" AllowClose="false">Connect a device first.</RadzenAlert>
+}
+else
+{
+    <RadzenCard Variant="Variant.Outlined" class="rz-mb-3">
+        <input type="file" accept=".apk" @ref="fileInput" @onchange="@OnFile" />
+        @if (fileName != null)
+        {
+            <RadzenText TextStyle="TextStyle.Body2" class="rz-mt-2">@fileName (@($"{fileSize:N0}") bytes)</RadzenText>
+            <RadzenButton Text="Install" Icon="install_mobile" class="rz-mt-2" Disabled="@busy" Click="@Install" />
+        }
+        @if (busy)
+        {
+            <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.Small" class="rz-ml-2" />
+        }
+    </RadzenCard>
+
+    @if (!string.IsNullOrEmpty(result))
+    {
+        <div class="tango-terminal">@result</div>
+    }
+}
+
+@code {
+    ElementRef<HTMLInputElement> fileInput;
+    File? selected;
+    string? fileName;
+    long fileSize;
+    string result = string.Empty;
+    bool busy;
+
+    void OnFile()
+    {
+        selected?.Dispose();
+        using var input = fileInput.Get();
+        using var files = input?.Files;
+        selected = files?.FirstOrDefault();
+        fileName = selected?.Name;
+        fileSize = selected?.Size ?? 0;
+        result = string.Empty;
+    }
+
+    async Task Install()
+    {
+        if (selected == null || Tango.Adb == null) return;
+        busy = true;
+        try
+        {
+            // The browser File's own stream goes straight to the device: the APK bytes never enter .NET.
+            result = $"Streaming {fileName} ({fileSize:N0} bytes) to device and installing...\n";
+            using var stream = selected.Stream();
+
+            var pm = new PackageManager(Tango.Adb);
+            var output = await pm.PushAndInstallStream(stream);
+            result += (string.IsNullOrWhiteSpace(output) ? "Success." : output.Trim()) + "\n";
+            Notifications.Notify(new NotificationMessage { Severity = NotificationSeverity.Success, Summary = "Install complete", Detail = fileName ?? "", Duration = 5000 });
+        }
+        catch (Exception ex)
+        {
+            result += $"[error] {ex.Message}\n";
+            Notifications.Notify(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = "Install failed", Detail = ex.Message, Duration = 7000 });
+        }
+        finally { busy = false; }
+    }
+}

@@ -1,0 +1,63 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Version>1.0.0</Version>
+		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<EmbedAllSources>true</EmbedAllSources>
+		<DebugType>Embedded</DebugType>
+		<Title>SpawnDev.SpawnJS.TangoADB</Title>
+		<Authors>LostBeard</Authors>
+		<Description>Use Tango (ya-webadb) from .NET in the browser (Blazor WebAssembly or plain .NET WASM, via SpawnDev.SpawnJS) to drive Android devices over WebUSB - connect, authenticate, shell, push/pull files, install APKs, reboot, and mirror the screen (scrcpy) - all from the browser.</Description>
+		<PackageProjectUrl>https://github.com/LostBeard/SpawnDev.SpawnJS.TangoADB</PackageProjectUrl>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
+		<PackageIcon>icon-128.png</PackageIcon>
+		<RepositoryUrl>https://github.com/LostBeard/SpawnDev.SpawnJS.TangoADB.git</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+		<PackageTags>SpawnJS;Blazor;BlazorWebAssembly;Javascript;ADB;WebUSB;Android;Tango;ya-webadb;scrcpy;Quest</PackageTags>
+		<!-- Trim safe, enforced: the analyzers run on every build and any IL2xxx warning fails it. The wrappers and option
+		     POCOs are built by the SpawnJS marshaller through reflection; ILLink.Descriptors.xml keeps their members. -->
+		<IsTrimmable>true</IsTrimmable>
+		<EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+		<WarningsAsErrors>$(WarningsAsErrors);IL2026;IL2046;IL2057;IL2060;IL2062;IL2065;IL2067;IL2069;IL2070;IL2072;IL2073;IL2074;IL2075;IL2076;IL2077;IL2078;IL2080;IL2087;IL2088;IL2089;IL2090;IL2091;IL2092;IL2093;IL2094;IL2095;IL2106;IL2111;IL2112;IL2113;IL2114</WarningsAsErrors>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- Ships in the package so a consumer can PublishTrimmed without knowing it exists. -->
+		<EmbeddedResource Include="ILLink.Descriptors.xml">
+			<LogicalName>ILLink.Descriptors.xml</LogicalName>
+		</EmbeddedResource>
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- Tango drives WebUSB: every API here is browser only. -->
+		<AssemblyAttribute Include="System.Runtime.Versioning.SupportedOSPlatformAttribute">
+			<_Parameter1>browser</_Parameter1>
+		</AssemblyAttribute>
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Include="Assets\icon-128.png" Pack="true" PackagePath="\" />
+		<None Include="..\LICENSE.txt" Pack="true" PackagePath="\" />
+		<None Include="..\README.md" Pack="true" PackagePath="\" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="SpawnDev.SpawnJS" Version="3.0.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<SupportedPlatform Include="browser" />
+	</ItemGroup>
+
+	<PropertyGroup>
+		<!-- Disable filename mangling with hash which is enabled by default in .Net 10 SDK. It causes runtime loading of Javascript files to fail due to unknown filename. -->
+		<StaticWebAssetFingerprintingEnabled>false</StaticWebAssetFingerprintingEnabled>
+		<StaticWebAssetsFingerprintContent>false</StaticWebAssetsFingerprintContent>
+	</PropertyGroup>
+
+</Project>
