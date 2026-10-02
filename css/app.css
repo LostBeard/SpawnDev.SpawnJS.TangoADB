@@ -1,0 +1,64 @@
+html, body {
+    margin: 0;
+    padding: 0;
+    background-color: #0b0d10;
+    color: #e8eaed;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+.app-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .75rem;
+    height: 100vh;
+    color: #9aa0a6;
+    font-size: 1.1rem;
+}
+
+.spin {
+    animation: spin 1.1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Terminal-style output panel used by the Shell page */
+.tango-terminal {
+    background: #06080a;
+    color: #c8f7c5;
+    font-family: 'Cascadia Code', 'Consolas', monospace;
+    font-size: .85rem;
+    line-height: 1.35;
+    padding: .75rem 1rem;
+    border-radius: 6px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    min-height: 220px;
+    max-height: 50vh;
+    overflow-y: auto;
+    border: 1px solid #1f2937;
+}
+
+.tango-accent { color: #ff6d41; }
+
+#blazor-error-ui {
+    background: #2b1416;
+    color: #ffb4a8;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0,0,0,.6);
+    display: none;
+    left: 0;
+    padding: .6rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: .75rem;
+    top: .5rem;
+}
