@@ -1,6 +1,12 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to **SpawnDev.SpawnJS.TangoADB** are documented here.
+
+## 1.0.1 - 2026-10-27
+
+- **Depends on SpawnDev.SpawnJS 3.0.5** (was 3.0.0). 3.0.5 fixes `JSTape` allocating memory quadratic in the size of a
+  call once its arguments outgrew one tape segment (64 KB); 3.0.4 reads records and constructor-only classes. No
+  change of its own. The demo moves to SpawnDev.SpawnJS.Blazor 3.0.5. Tests: `SpawnDev.SpawnJS.TangoADB.Tests` pass.
 
 ## 1.0.0
 
